@@ -1,0 +1,192 @@
+<section class="module" id="module-4" style="background: var(--color-bg);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Где у проекта внешние границы</h1>
+      <p class="module-subtitle">
+        Архитектурно важнее всего понимать, где заканчивается ваш код и начинается чужая инфраструктура.
+        В этом репозитории таких границ три: Telegram, OpenAI и окружение с секретами.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Три двери наружу</h2>
+      <div class="arch-diagram animate-in">
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Ваш процесс</h4>
+          <div class="arch-component" data-desc="aiogram Bot и Dispatcher живут внутри процесса и работают в polling режиме. Они получают update и отправляют reply.">
+            <div class="arch-icon">🏠</div>
+            <span>Локальный процесс</span>
+          </div>
+        </div>
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Внешние сервисы</h4>
+          <div class="arch-component" data-desc="Telegram хранит сообщения и файлы. Ваш код видит их только через Bot API методы вроде get_file и download_file.">
+            <div class="arch-icon">✈️</div>
+            <span>Telegram Bot API</span>
+          </div>
+          <div class="arch-component" data-desc="OpenAI отвечает за chat completion и transcription. Это отдельная внешняя система с отдельными моделями и стоимостью вызовов.">
+            <div class="arch-icon">🌐</div>
+            <span>OpenAI API</span>
+          </div>
+        </div>
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Конфигурация</h4>
+          <div class="arch-component" data-desc="config.py читает env-файлы local.env и .env и валидирует обязательные токены. Секреты не зашиваются в код.">
+            <div class="arch-icon">🔑</div>
+            <span>env-файлы</span>
+          </div>
+        </div>
+        <div class="arch-description">Кликните на границу, чтобы увидеть, какая ответственность на ней лежит.</div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Какие настройки действительно двигают систему</h2>
+      <p class="animate-in">
+        Хорошая конфигурация похожа на паспортный контроль: наружу выпускаются только те данные, без которых система не может жить.
+        Все остальное либо имеет дефолт, либо игнорируется.
+      </p>
+
+      <div class="badge-list animate-in">
+        <div class="badge-item">
+          <code class="badge-code">BOT_TOKEN</code>
+          <span class="badge-desc">Позволяет приложению действовать от имени Telegram-бота</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">OPENAI_API_KEY</code>
+          <span class="badge-desc">Открывает доступ к внешнему AI-провайдеру</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">OPENAI_CHAT_MODEL</code>
+          <span class="badge-desc">Выбирает модель для ответов на текст и фото</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">OPENAI_TRANSCRIPTION_MODEL</code>
+          <span class="badge-desc">Выбирает модель для расшифровки голосовых</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">SYSTEM_PROMPT</code>
+          <span class="badge-desc">Формирует характер и стиль ответа ассистента</span>
+        </div>
+      </div>
+
+      <div class="callout callout-accent animate-in">
+        <div class="callout-icon">🔐</div>
+        <div class="callout-content">
+          <strong class="callout-title">Практический вывод</strong>
+          <p>Если AI-агент предлагает вписать ключ прямо в Python-файл, это уже архитектурный запах. В этом проекте секреты намеренно живут только в окружении.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, где голос выходит за пределы приложения</h2>
+      <p class="animate-in">
+        Источник: <code>bot/ai/client.py</code>, строки 173-182.
+        Здесь видна граница с внешним
+        <span class="term" data-definition="SDK это готовая библиотека от сервиса, которая помогает вашему коду общаться с внешним API без ручной сборки всех HTTP-запросов.">SDK</span>:
+        локальные байты превращаются в запрос к OpenAI, а затем обратно в обычный текст.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line">buffer = <span class="code-function">BytesIO</span>(audio_bytes)</span>
+<span class="code-line">buffer.name = filename</span>
+<span class="code-line">response = <span class="code-keyword">await</span> self._transcription_client.audio.transcriptions.create(</span>
+<span class="code-line">    <span class="code-property">model</span>=self._transcription_model,</span>
+<span class="code-line">    <span class="code-property">file</span>=buffer,</span>
+<span class="code-line">    <span class="code-property">response_format</span>=<span class="code-string">"text"</span>,</span>
+<span class="code-line">)</span>
+<span class="code-line"><span class="code-keyword">if</span> <span class="code-function">isinstance</span>(response, <span class="code-function">str</span>):</span>
+<span class="code-line">    <span class="code-keyword">return</span> response.strip()</span>
+<span class="code-line"><span class="code-keyword">return</span> <span class="code-function">getattr</span>(response, <span class="code-string">"text"</span>, <span class="code-string">""</span>).strip()</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Сырые байты голоса оборачиваются во временный файловый объект, потому что внешнее API ждет именно файл.</p>
+            <p class="tl">К объекту добавляется имя файла, чтобы сервис понимал, с чем работает.</p>
+            <p class="tl">Дальше вызывается удаленная транскрипция: модель, файл и формат ответа отправляются наружу.</p>
+            <p class="tl">Когда ответ приходит обратно, код аккуратно нормализует его в обычную строку без лишних пробелов.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Квиз про границы системы</h2>
+      <div class="quiz-container animate-in" id="quiz-module4">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Да. Это классическая внешняя граница, потому что проблема лежит между вашим процессом и удаленным сервисом."
+             data-explanation-wrong="Подумайте не о бизнес-логике, а о том, где именно приложение покидает свой внутренний мир и идет во внешний сервис.">
+          <h3 class="quiz-question">Если транскрипция перестала работать из-за нового ответа OpenAI, какая граница сломалась первой?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Внутренний routing между handlers</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Интеграция между вашим AI-клиентом и OpenAI API</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Папка <code>tests/</code> как структура файлов</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Именно. Модель и секреты относятся к окружению, поэтому их логично менять через env, не трогая код приложения."
+             data-explanation-wrong="Спросите себя, где в проекте уже предусмотрено место для секретов и параметров моделей.">
+          <h3 class="quiz-question">Вы хотите попробовать другую chat-модель без изменения Python-кода. Какой путь самый здоровый?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Поменять значение в <code>.env</code> или <code>local.env</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Захардкодить новую строку прямо в <code>bot/ai/client.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Изменить комментарий в README</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Верно. Polling означает, что приложение само регулярно спрашивает Telegram, не пришли ли новые обновления."
+             data-explanation-wrong="Подумайте, кто делает первый ход: ваш процесс или Telegram. В polling инициатором является ваш бот.">
+          <h3 class="quiz-question">Что практически означает, что бот работает в режиме <span class="term" data-definition="Polling это режим, в котором приложение само регулярно опрашивает внешний сервис на предмет новых событий. То есть бот спрашивает Telegram снова и снова: есть ли новые сообщения.">polling</span>?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Telegram запускает ваш код у себя на серверах</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Бот читает сообщения прямо из README</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Ваш процесс сам ходит в Telegram и забирает новые update</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>

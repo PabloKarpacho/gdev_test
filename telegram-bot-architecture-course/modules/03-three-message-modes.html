@@ -1,0 +1,195 @@
+<section class="module" id="module-3" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">03</span>
+      <h1 class="module-title">Как общаются три режима: text, photo, voice</h1>
+      <p class="module-subtitle">
+        Пользователь видит одну кнопку отправки, но архитектурно внутри живут три разных сценария.
+        Это хороший пример того, как один продуктовый интерфейс прячет несколько технологических маршрутов.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Три маршрута, три разных уровня сложности</h2>
+      <div class="pattern-cards stagger-children">
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-1);">
+          <div class="pattern-icon" style="background: var(--color-actor-1);">✍️</div>
+          <h4 class="pattern-title">Text flow</h4>
+          <p class="pattern-desc">Самый простой путь: обрезать пробелы, проверить пустоту и вызвать модель.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-2);">
+          <div class="pattern-icon" style="background: var(--color-actor-2);">🖼️</div>
+          <h4 class="pattern-title">Photo flow</h4>
+          <p class="pattern-desc">Нужна работа с бинарным вложением: скачать, проверить размер, собрать multimodal запрос.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-5);">
+          <div class="pattern-icon" style="background: var(--color-actor-5);">🎙️</div>
+          <h4 class="pattern-title">Voice flow</h4>
+          <p class="pattern-desc">Два шага вместо одного: сначала транскрипция аудио, потом обычный текстовый ответ.</p>
+        </div>
+      </div>
+
+      <div class="flow-steps animate-in" style="margin-top: var(--space-8);">
+        <div class="flow-step">
+          <div class="flow-step-num">1</div>
+          <p>Текст сразу идет в сервис</p>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num">2</div>
+          <p>Фото проходит через скачивание</p>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num">3</div>
+          <p>Голос сначала превращается в текст</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, где сервис выбирает поведение для фото</h2>
+      <p class="animate-in">
+        Источник: <code>bot/services/chat.py</code>, строки 80-85. Это хороший пример того, зачем нужен
+        <span class="term" data-definition="Service layer это слой прикладных правил. Он не ловит события напрямую и не работает с сетью сам, а решает, как приложение должно себя вести в обычных и граничных случаях.">service layer</span>:
+        он принимает уже скачанный файл и решает, с каким prompt отправлять его дальше.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line">prompt = (caption <span class="code-operator">or</span> <span class="code-string">""</span>).strip() <span class="code-operator">or</span> DEFAULT_PHOTO_PROMPT</span>
+<span class="code-line"><span class="code-keyword">return</span> <span class="code-keyword">await</span> self._ai_client.<span class="code-function">respond_to_photo</span>(</span>
+<span class="code-line">    <span class="code-property">prompt</span>=prompt,</span>
+<span class="code-line">    <span class="code-property">photo_bytes</span>=attachment.content,</span>
+<span class="code-line">    <span class="code-property">mime_type</span>=attachment.mime_type,</span>
+<span class="code-line">)</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Если подписи к фото нет, сервис сам подставляет безопасный стандартный prompt.</p>
+            <p class="tl">Дальше он не думает про Telegram и не возится с файлами заново, а просто зовет AI-клиент.</p>
+            <p class="tl">В AI уходят три вещи: текстовая инструкция, сами байты картинки и MIME type.</p>
+            <p class="tl">Благодаря этому сервис отвечает за смысл запроса, а не за сетевые детали.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Что меняется между режимами на практике</h2>
+      <div class="icon-rows animate-in">
+        <div class="icon-row">
+          <div class="icon-circle" style="background: var(--color-actor-1);">T</div>
+          <div>
+            <strong>Текстовый режим</strong>
+            <p>Минимум инфраструктуры. Идеален как базовый канал и как fallback-модель мышления для всей системы.</p>
+          </div>
+        </div>
+        <div class="icon-row">
+          <div class="icon-circle" style="background: var(--color-actor-2);">P</div>
+          <div>
+            <strong>Фото-режим</strong>
+            <p>Добавляется <span class="term" data-definition="Binary attachment это файл в виде сырых байтов, а не готового текста. С таким объектом обычно работают отдельно: скачивают, валидируют и только потом передают дальше.">binary attachment</span> и проверка размера, потому что цена ошибки тут выше.</p>
+          </div>
+        </div>
+        <div class="icon-row">
+          <div class="icon-circle" style="background: var(--color-actor-5);">V</div>
+          <div>
+            <strong>Голосовой режим</strong>
+            <p>Появляется промежуточное представление: сначала аудио, потом текст, и только затем обычный AI-ответ.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-warning animate-in">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-content">
+          <strong class="callout-title">Где чаще всего ошибается AI-агент</strong>
+          <p>Он пытается засунуть фото и голос в тот же маршрут, что и текст. В этом репозитории это неверно: у вложений есть отдельный защитный слой и отдельные этапы обработки.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Сценарный квиз</h2>
+      <div class="quiz-container animate-in" id="quiz-module3">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Да. Для голоса сначала нужен текст, иначе остальная система не сможет использовать уже существующий chat flow."
+             data-explanation-wrong="Подумайте, какое промежуточное представление позволяет переиспользовать уже написанную текстовую логику.">
+          <div class="scenario-block">
+            <div class="scenario-context">
+              <span class="scenario-label">Сценарий</span>
+              <p>Пользователь прислал голосовое сообщение, а вы хотите переиспользовать уже существующую текстовую логику ответа.</p>
+            </div>
+          </div>
+          <h3 class="quiz-question">Какой промежуточный шаг нужен архитектурно?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сразу отправить байты аудио в <code>reply_to_text</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сначала сделать транскрипцию, потом вызвать текстовый маршрут</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Вообще не использовать сервисный слой</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Верно. Размер и формат файла это граничная защита перед дорогим внешним вызовом."
+             data-explanation-wrong="Спросите себя, что дешевле проверить раньше: локальные ограничения или дорогой внешний вызов к модели.">
+          <h3 class="quiz-question">Где логичнее проверять, что голосовое сообщение не слишком большое?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>После успешного ответа модели</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>В README во время установки</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>На границе скачивания файла, до обращения к OpenAI</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Именно. Если пользователь не дал подпись, сервис сам формирует осмысленный prompt и не заставляет handler решать бизнес-вопрос."
+             data-explanation-wrong="Вопрос не в том, кто заметил отсутствие подписи, а в том, кто должен придумать поведение по умолчанию.">
+          <h3 class="quiz-question">Почему дефолтный prompt для фото задан в сервисе, а не прямо в handler?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что это прикладное правило ответа, а не техническая маршрутизация</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что handlers не умеют читать строки</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что OpenAI требует хранить prompt только в <code>pyproject.toml</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>

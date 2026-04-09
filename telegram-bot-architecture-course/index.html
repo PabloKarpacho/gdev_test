@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Как устроен Telegram ChatGPT Bot</title>
+
+  <!-- Google Fonts: Bricolage Grotesque · DM Sans · JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    :root {
+      --color-accent:       #2A7B9B;
+      --color-accent-hover: #1F6280;
+      --color-accent-light: #E4F2F7;
+      --color-accent-muted: #5A9DB8;
+    }
+  </style>
+
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="nav-inner">
+      <span class="nav-title">Как устроен Telegram ChatGPT Bot</span>
+      <div class="nav-dots" id="nav-dots" role="tablist">
+        <button class="nav-dot" data-target="module-1" data-tooltip="Путь сообщения" role="tab" aria-label="Модуль 1: Путь сообщения"></button>
+        <button class="nav-dot" data-target="module-2" data-tooltip="Главные акторы" role="tab" aria-label="Модуль 2: Главные акторы"></button>
+        <button class="nav-dot" data-target="module-3" data-tooltip="Три режима" role="tab" aria-label="Модуль 3: Три режима"></button>
+        <button class="nav-dot" data-target="module-4" data-tooltip="Внешние границы" role="tab" aria-label="Модуль 4: Внешние границы"></button>
+        <button class="nav-dot" data-target="module-5" data-tooltip="Надежность" role="tab" aria-label="Модуль 5: Надежность"></button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- modules/*.html content is assembled here by build.sh -->
+<section class="module" id="module-1" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">01</span>
+      <h1 class="module-title">Что происходит, когда вы пишете боту</h1>
+      <p class="module-subtitle">
+        Этот репозиторий собирает компактного Telegram-бота, который умеет отвечать на текст,
+        фото и голос. Главная архитектурная идея простая: каждое звено делает только одну работу,
+        а затем передает эстафету дальше.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Начинаем с продукта, а не с Python</h2>
+      <p class="animate-in">
+        Представьте почтовый терминал: вы кладете конверт в окно, а дальше его подхватывает целая цепочка сотрудников.
+        Здесь такой же принцип. Пользователь видит один чат, но внутри работают
+        <span class="term" data-definition="Telegram API это официальный интерфейс Telegram, через который программы получают сообщения и отправляют ответы. Думайте о нем как об окне выдачи заказов между вашим кодом и приложением Telegram.">Telegram API</span>,
+        <span class="term" data-definition="Handler это функция, которая ловит конкретный тип события. В этом проекте один handler реагирует на текст, другой на фото, третий на голос.">handler</span>,
+        сервис и AI-клиент.
+      </p>
+
+      <div class="step-cards stagger-children">
+        <div class="step-card animate-in">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Текст</strong>
+            <p>Самый короткий маршрут: сообщение пришло, сервис проверил пустой ли текст, затем вопрос ушел в модель.</p>
+          </div>
+        </div>
+        <div class="step-card animate-in">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Фото</strong>
+            <p>Сначала бот скачивает самую крупную версию изображения, проверяет размер и только потом отдает его AI.</p>
+          </div>
+        </div>
+        <div class="step-card animate-in">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Голос</strong>
+            <p>Аудио превращается в текст через транскрипцию, и уже этот текст идет в обычный диалоговый ответ.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-accent animate-in">
+        <div class="callout-icon">💡</div>
+        <div class="callout-content">
+          <strong class="callout-title">Почему это полезно знать</strong>
+          <p>Если AI-агент предложит добавить новую фичу, вы уже сможете сказать, в каком звене она должна жить: в обработчике, в сервисе или на внешней границе с Telegram и OpenAI.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Путь обычного текстового сообщения</h2>
+      <p class="animate-in">
+        Здесь удобно думать не как о коде, а как о сортировочном центре. Каждый узел знает только свой кусок маршрута.
+        Это и есть
+        <span class="term" data-definition="Data flow это путь, по которому данные проходят через систему шаг за шагом. Если что-то не работает, почти всегда нужно понять, где на этом пути данные потерялись или изменились.">поток данных</span>.
+      </p>
+
+      <div class="flow-animation animate-in" data-steps='[
+        {"highlight":"flow-actor-1","label":"Пользователь пишет сообщение в Telegram"},
+        {"highlight":"flow-actor-2","label":"Telegram доставляет update в приложение","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-3","label":"Chat handler понимает, что это обычный текст","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-4","label":"ChatService нормализует текст и вызывает AI","packet":true,"from":"actor-3","to":"actor-4"},
+        {"highlight":"flow-actor-5","label":"OpenAI возвращает ответ, который уходит обратно пользователю","packet":true,"from":"actor-4","to":"actor-5"}
+      ]'>
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-actor-1">
+            <div class="flow-actor-icon">🙂</div>
+            <span>Пользователь</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-2">
+            <div class="flow-actor-icon">✈️</div>
+            <span>Telegram</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-3">
+            <div class="flow-actor-icon">🧭</div>
+            <span>Handler</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-4">
+            <div class="flow-actor-icon">🧠</div>
+            <span>ChatService</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-5">
+            <div class="flow-actor-icon">🤖</div>
+            <span>OpenAI</span>
+          </div>
+        </div>
+
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label">Нажмите “Следующий шаг”, чтобы пройти маршрут сообщения.</div>
+
+        <div class="flow-controls">
+          <button class="btn btn-primary flow-next-btn">Следующий шаг</button>
+          <button class="btn flow-reset-btn">Сначала</button>
+          <span class="flow-progress" style="display:none"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, где бот собирается в одно целое</h2>
+      <p class="animate-in">
+        Источник: <code>bot/__main__.py</code>, строки 23-35. Это
+        <span class="term" data-definition="Entrypoint это главная точка входа программы. Именно отсюда приложение начинает жизнь: читает настройки, создает объекты и запускает рабочий цикл.">entrypoint</span>
+        всей системы. Как режиссер перед съемкой, он собирает актеров на площадке и раздает роли.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line">settings = <span class="code-function">load_settings</span>()</span>
+<span class="code-line"><span class="code-function">setup_logging</span>(<span class="code-property">level</span>=settings.log_level)</span>
+<span class="code-line">logger.<span class="code-function">info</span>(<span class="code-string">"Starting bot application"</span>)</span>
+<span class="code-line"></span>
+<span class="code-line">bot = <span class="code-function">get_bot</span>(<span class="code-property">token</span>=settings.bot_token)</span>
+<span class="code-line">dispatcher = <span class="code-function">get_dispatcher</span>()</span>
+<span class="code-line">ai_client = <span class="code-function">build_openai_chat_client</span>(</span>
+<span class="code-line">    <span class="code-property">api_key</span>=settings.openai_api_key,</span>
+<span class="code-line">    <span class="code-property">model_name</span>=settings.openai_chat_model,</span>
+<span class="code-line">    <span class="code-property">transcription_model</span>=settings.openai_transcription_model,</span>
+<span class="code-line">    <span class="code-property">system_prompt</span>=settings.system_prompt,</span>
+<span class="code-line">)</span>
+<span class="code-line">chat_service = <span class="code-function">ChatService</span>(<span class="code-property">ai_client</span>=ai_client)</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Сначала программа читает настройки из окружения и готовит логирование.</p>
+            <p class="tl">Потом создается клиент Telegram, то есть объект, который умеет говорить с сервером Telegram.</p>
+            <p class="tl">Следом поднимается dispatcher: он будет решать, какой обработчик должен сработать на новое событие.</p>
+            <p class="tl">Дальше собирается AI-клиент с нужной моделью, ключом и системным промптом.</p>
+            <p class="tl">В самом конце создается ChatService, который становится центральным координатором между Telegram и OpenAI.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Проверьте архитектурную интуицию</h2>
+      <div class="quiz-container animate-in" id="quiz-module1">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Верно. Handler только ловит событие и передает его дальше. Бизнес-решение здесь принято в сервисном слое."
+             data-explanation-wrong="Подумайте, где в проекте живет решение о том, что делать с уже полученным сообщением. Это не Telegram и не точка входа.">
+          <h3 class="quiz-question">Вы хотите поменять правило для пустых текстовых сообщений. Куда смотреть первым делом?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/__main__.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/services/chat.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>pyproject.toml</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Точно. Фото проходит дополнительную стадию скачивания и проверки вложения до обращения к модели."
+             data-explanation-wrong="Посмотрите на продукт глазами пользователя: именно фото и голос требуют сначала взять бинарный файл, а не только текстовое поле.">
+          <h3 class="quiz-question">Какой тип сообщения требует отдельного шага “скачать файл из Telegram” еще до вызова AI?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Только обычный текст</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Никакой, все сразу идут в модель</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Фото и голосовые сообщения</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Да. Dispatcher это маршрутизатор событий: он не думает за AI, а только направляет update в правильный handler."
+             data-explanation-wrong="Спросите себя, какой объект выбирает маршрут для входящих событий. Это инфраструктурная роль, а не сервисная логика.">
+          <h3 class="quiz-question">Если завтра добавить новый тип сообщения, какой объект первым должен решить, кому его отдать?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><span class="term" data-definition="Dispatcher это маршрутизатор событий внутри aiogram. Он получает обновление и решает, какой handler подходит под это событие.">Dispatcher</span></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>OpenAI-клиент</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>README.md</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="module" id="module-2" style="background: var(--color-bg);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">02</span>
+      <h1 class="module-title">Кто здесь главные акторы</h1>
+      <p class="module-subtitle">
+        Хорошая архитектура читается как список ролей. Этот проект маленький, поэтому роли видны особенно чисто:
+        точка входа, маршрутизация, сервис, интеграция с AI и защитный слой для файлов.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Структура проекта в одном взгляде</h2>
+      <p class="animate-in">
+        Думайте о папках как о комнатах в студии. Каждая комната нужна для своего типа работы, и поэтому код не смешивается в одну большую стену.
+      </p>
+
+      <div class="file-tree animate-in">
+        <div class="ft-folder open">
+          <span class="ft-name">bot/</span>
+          <span class="ft-desc">Вся рабочая логика приложения</span>
+          <div class="ft-children">
+            <div class="ft-file">
+              <span class="ft-name">__main__.py</span>
+              <span class="ft-desc">Запускает приложение и собирает зависимости</span>
+            </div>
+            <div class="ft-folder open">
+              <span class="ft-name">handlers/</span>
+              <span class="ft-desc">Ловит входящие события Telegram</span>
+              <div class="ft-children">
+                <div class="ft-file">
+                  <span class="ft-name">start.py</span>
+                  <span class="ft-desc">Отвечает на команду <code>/start</code></span>
+                </div>
+                <div class="ft-file">
+                  <span class="ft-name">chat.py</span>
+                  <span class="ft-desc">Принимает текст, фото и голос</span>
+                </div>
+              </div>
+            </div>
+            <div class="ft-folder">
+              <span class="ft-name">services/</span>
+              <span class="ft-desc">Бизнес-логика общения с AI</span>
+            </div>
+            <div class="ft-folder">
+              <span class="ft-name">ai/</span>
+              <span class="ft-desc">Тонкая оболочка над LangChain и OpenAI</span>
+            </div>
+            <div class="ft-folder">
+              <span class="ft-name">telegram/</span>
+              <span class="ft-desc">Скачивание и проверка вложений</span>
+            </div>
+          </div>
+        </div>
+        <div class="ft-folder">
+          <span class="ft-name">tests/</span>
+          <span class="ft-desc">Проверки для bootstrapping, handlers, config и file flow</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Архитектура как карта ролей</h2>
+      <p class="animate-in">
+        Если представить код как съемочную площадку, то каждый блок ниже отвечает на вопрос: кто делает работу руками, а кто только координирует.
+      </p>
+
+      <div class="arch-diagram animate-in">
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Внутри процесса</h4>
+          <div class="arch-component" data-desc="Entrypoint читает настройки, поднимает логирование, создает Bot, Dispatcher, AI client и ChatService. Это сборочный стол всей программы.">
+            <div class="arch-icon">🚀</div>
+            <span>__main__.py</span>
+          </div>
+          <div class="arch-component" data-desc="Dispatcher и routers решают, какой handler должен среагировать на новый update из Telegram.">
+            <div class="arch-icon">🧭</div>
+            <span>handlers/</span>
+          </div>
+          <div class="arch-component" data-desc="ChatService содержит прикладные правила: что делать с пустым текстом, какой prompt дать фото, что делать с пустой транскрипцией.">
+            <div class="arch-icon">🪄</div>
+            <span>services/chat.py</span>
+          </div>
+        </div>
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Интеграции</h4>
+          <div class="arch-component" data-desc="bot/ai/client.py прячет детали LangChain и OpenAI за одним интерфейсом. Остальной код не обязан знать, как именно устроен провайдер.">
+            <div class="arch-icon">🤝</div>
+            <span>ai/client.py</span>
+          </div>
+          <div class="arch-component" data-desc="telegram/files.py это защитный шлюз для бинарных вложений. Он скачивает, проверяет размер, MIME type и формирует безопасный BinaryAttachment.">
+            <div class="arch-icon">🛡️</div>
+            <span>telegram/files.py</span>
+          </div>
+          <div class="arch-component" data-desc="config.py берет секреты и параметры моделей из env-файла, чтобы токены не жили внутри кода.">
+            <div class="arch-icon">🔐</div>
+            <span>config.py</span>
+          </div>
+        </div>
+        <div class="arch-description">Нажмите на любой блок, чтобы увидеть его роль в архитектуре.</div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, который подключает маршруты</h2>
+      <p class="animate-in">
+        Источник: <code>bot/handlers/__init__.py</code>, строки 26-29. Это хороший пример
+        <span class="term" data-definition="Separation of concerns это принцип, когда каждая часть системы отвечает за свой кусок работы и не залезает в чужие обязанности. Так код проще менять и дебажить.">разделения ответственности</span>:
+        файл не обрабатывает сообщения сам, а только регистрирует нужные маршруты.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line">logger.<span class="code-function">info</span>(<span class="code-string">"Registering bot routers"</span>)</span>
+<span class="code-line">dispatcher.<span class="code-function">include_router</span>(<span class="code-function">build_start_router</span>())</span>
+<span class="code-line">dispatcher.<span class="code-function">include_router</span>(<span class="code-function">build_chat_router</span>(<span class="code-property">chat_service</span>=chat_service))</span>
+<span class="code-line">logger.<span class="code-function">info</span>(<span class="code-string">"All bot routers registered"</span>)</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Сначала код пишет в лог, что начинает подключать маршруты.</p>
+            <p class="tl">Потом в dispatcher добавляется отдельный роутер для команды <code>/start</code>.</p>
+            <p class="tl">Следом подключается чатовый роутер, которому сразу передают готовый ChatService.</p>
+            <p class="tl">В конце система фиксирует, что маршрутизация собрана и бот готов принимать события.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Если бы модули переписывались в общем чате</h2>
+      <p class="animate-in">
+        Это самый полезный способ мысленно отлаживать систему. Если вы понимаете, кто кому пишет, вы быстрее находите место, где общение обрывается.
+      </p>
+
+      <div class="chat-window animate-in" id="chat-routing">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="actor-a" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-1)">S</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-1)">Start Router</span>
+              <p>Я беру только команду <code>/start</code>. Все остальное не мое.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="actor-b" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">C</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">Chat Router</span>
+              <p>Я ловлю текст, фото и голос, а потом отдаю работу сервису.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="actor-c" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-3)">S</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-3)">ChatService</span>
+              <p>Я решаю, какой prompt собрать и что делать в граничных случаях.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="actor-d" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">A</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">AI Client</span>
+              <p>Я уже говорю с LangChain и OpenAI. Остальной код может не знать деталей SDK.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-typing" id="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-routing-typing-avatar">?</div>
+          <div class="chat-typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+
+        <div class="chat-controls">
+          <button class="btn chat-next-btn">Следующее сообщение</button>
+          <button class="btn chat-all-btn">Проиграть все</button>
+          <button class="btn chat-reset-btn">Повторить</button>
+          <span class="chat-progress" style="display:none"></span>
+        </div>
+      </div>
+
+      <div class="callout callout-info animate-in">
+        <div class="callout-icon">🧠</div>
+        <div class="callout-content">
+          <strong class="callout-title">Архитектурный язык, который полезен для промптов</strong>
+          <p>Когда вы просите AI “добавь новый handler, но не трогай service layer”, это уже не абстрактное пожелание, а точная инструкция, куда класть логику.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Мини-экзамен на понимание ролей</h2>
+      <div class="quiz-container animate-in" id="quiz-module2">
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Да. Именно handler определяет, что событие относится к фото, но не занимается всей дальнейшей логикой сам."
+             data-explanation-wrong="Подумайте, кто первым видит тип входящего сообщения и решает, какой маршрут использовать.">
+          <h3 class="quiz-question">Если пользователь прислал фото вместо текста, какой слой первым это заметит?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>config.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>OpenAIChatClient</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>router и его photo handler</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Верно. ChatService хранит прикладные правила, а значит именно там логично менять поведение ответа."
+             data-explanation-wrong="Спросите себя: где в проекте живут правила общения, а не техническая интеграция?">
+          <h3 class="quiz-question">Вы хотите, чтобы бот отвечал по-разному на фото с подписью и без подписи. Где это место меняется естественнее всего?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/app.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/services/chat.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>tests/test_bootstrap.py</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Именно так. Интеграционный слой полезен тем, что остальной код не зависит от деталей стороннего SDK."
+             data-explanation-wrong="Посмотрите, какой файл уже прячет внутри и LangChain, и OpenAI API, давая наружу единый интерфейс.">
+          <h3 class="quiz-question">Какой файл лучше всего подходит на роль “адаптера” между вашим кодом и внешним AI-провайдером?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/ai/client.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>README.md</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/common/logging.py</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="module" id="module-3" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">03</span>
+      <h1 class="module-title">Как общаются три режима: text, photo, voice</h1>
+      <p class="module-subtitle">
+        Пользователь видит одну кнопку отправки, но архитектурно внутри живут три разных сценария.
+        Это хороший пример того, как один продуктовый интерфейс прячет несколько технологических маршрутов.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Три маршрута, три разных уровня сложности</h2>
+      <div class="pattern-cards stagger-children">
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-1);">
+          <div class="pattern-icon" style="background: var(--color-actor-1);">✍️</div>
+          <h4 class="pattern-title">Text flow</h4>
+          <p class="pattern-desc">Самый простой путь: обрезать пробелы, проверить пустоту и вызвать модель.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-2);">
+          <div class="pattern-icon" style="background: var(--color-actor-2);">🖼️</div>
+          <h4 class="pattern-title">Photo flow</h4>
+          <p class="pattern-desc">Нужна работа с бинарным вложением: скачать, проверить размер, собрать multimodal запрос.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-5);">
+          <div class="pattern-icon" style="background: var(--color-actor-5);">🎙️</div>
+          <h4 class="pattern-title">Voice flow</h4>
+          <p class="pattern-desc">Два шага вместо одного: сначала транскрипция аудио, потом обычный текстовый ответ.</p>
+        </div>
+      </div>
+
+      <div class="flow-steps animate-in" style="margin-top: var(--space-8);">
+        <div class="flow-step">
+          <div class="flow-step-num">1</div>
+          <p>Текст сразу идет в сервис</p>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num">2</div>
+          <p>Фото проходит через скачивание</p>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num">3</div>
+          <p>Голос сначала превращается в текст</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, где сервис выбирает поведение для фото</h2>
+      <p class="animate-in">
+        Источник: <code>bot/services/chat.py</code>, строки 80-85. Это хороший пример того, зачем нужен
+        <span class="term" data-definition="Service layer это слой прикладных правил. Он не ловит события напрямую и не работает с сетью сам, а решает, как приложение должно себя вести в обычных и граничных случаях.">service layer</span>:
+        он принимает уже скачанный файл и решает, с каким prompt отправлять его дальше.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line">prompt = (caption <span class="code-operator">or</span> <span class="code-string">""</span>).strip() <span class="code-operator">or</span> DEFAULT_PHOTO_PROMPT</span>
+<span class="code-line"><span class="code-keyword">return</span> <span class="code-keyword">await</span> self._ai_client.<span class="code-function">respond_to_photo</span>(</span>
+<span class="code-line">    <span class="code-property">prompt</span>=prompt,</span>
+<span class="code-line">    <span class="code-property">photo_bytes</span>=attachment.content,</span>
+<span class="code-line">    <span class="code-property">mime_type</span>=attachment.mime_type,</span>
+<span class="code-line">)</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Если подписи к фото нет, сервис сам подставляет безопасный стандартный prompt.</p>
+            <p class="tl">Дальше он не думает про Telegram и не возится с файлами заново, а просто зовет AI-клиент.</p>
+            <p class="tl">В AI уходят три вещи: текстовая инструкция, сами байты картинки и MIME type.</p>
+            <p class="tl">Благодаря этому сервис отвечает за смысл запроса, а не за сетевые детали.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Что меняется между режимами на практике</h2>
+      <div class="icon-rows animate-in">
+        <div class="icon-row">
+          <div class="icon-circle" style="background: var(--color-actor-1);">T</div>
+          <div>
+            <strong>Текстовый режим</strong>
+            <p>Минимум инфраструктуры. Идеален как базовый канал и как fallback-модель мышления для всей системы.</p>
+          </div>
+        </div>
+        <div class="icon-row">
+          <div class="icon-circle" style="background: var(--color-actor-2);">P</div>
+          <div>
+            <strong>Фото-режим</strong>
+            <p>Добавляется <span class="term" data-definition="Binary attachment это файл в виде сырых байтов, а не готового текста. С таким объектом обычно работают отдельно: скачивают, валидируют и только потом передают дальше.">binary attachment</span> и проверка размера, потому что цена ошибки тут выше.</p>
+          </div>
+        </div>
+        <div class="icon-row">
+          <div class="icon-circle" style="background: var(--color-actor-5);">V</div>
+          <div>
+            <strong>Голосовой режим</strong>
+            <p>Появляется промежуточное представление: сначала аудио, потом текст, и только затем обычный AI-ответ.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-warning animate-in">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-content">
+          <strong class="callout-title">Где чаще всего ошибается AI-агент</strong>
+          <p>Он пытается засунуть фото и голос в тот же маршрут, что и текст. В этом репозитории это неверно: у вложений есть отдельный защитный слой и отдельные этапы обработки.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Сценарный квиз</h2>
+      <div class="quiz-container animate-in" id="quiz-module3">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Да. Для голоса сначала нужен текст, иначе остальная система не сможет использовать уже существующий chat flow."
+             data-explanation-wrong="Подумайте, какое промежуточное представление позволяет переиспользовать уже написанную текстовую логику.">
+          <div class="scenario-block">
+            <div class="scenario-context">
+              <span class="scenario-label">Сценарий</span>
+              <p>Пользователь прислал голосовое сообщение, а вы хотите переиспользовать уже существующую текстовую логику ответа.</p>
+            </div>
+          </div>
+          <h3 class="quiz-question">Какой промежуточный шаг нужен архитектурно?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сразу отправить байты аудио в <code>reply_to_text</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сначала сделать транскрипцию, потом вызвать текстовый маршрут</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Вообще не использовать сервисный слой</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Верно. Размер и формат файла это граничная защита перед дорогим внешним вызовом."
+             data-explanation-wrong="Спросите себя, что дешевле проверить раньше: локальные ограничения или дорогой внешний вызов к модели.">
+          <h3 class="quiz-question">Где логичнее проверять, что голосовое сообщение не слишком большое?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>После успешного ответа модели</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>В README во время установки</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>На границе скачивания файла, до обращения к OpenAI</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Именно. Если пользователь не дал подпись, сервис сам формирует осмысленный prompt и не заставляет handler решать бизнес-вопрос."
+             data-explanation-wrong="Вопрос не в том, кто заметил отсутствие подписи, а в том, кто должен придумать поведение по умолчанию.">
+          <h3 class="quiz-question">Почему дефолтный prompt для фото задан в сервисе, а не прямо в handler?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что это прикладное правило ответа, а не техническая маршрутизация</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что handlers не умеют читать строки</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что OpenAI требует хранить prompt только в <code>pyproject.toml</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="module" id="module-4" style="background: var(--color-bg);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Где у проекта внешние границы</h1>
+      <p class="module-subtitle">
+        Архитектурно важнее всего понимать, где заканчивается ваш код и начинается чужая инфраструктура.
+        В этом репозитории таких границ три: Telegram, OpenAI и окружение с секретами.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Три двери наружу</h2>
+      <div class="arch-diagram animate-in">
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Ваш процесс</h4>
+          <div class="arch-component" data-desc="aiogram Bot и Dispatcher живут внутри процесса и работают в polling режиме. Они получают update и отправляют reply.">
+            <div class="arch-icon">🏠</div>
+            <span>Локальный процесс</span>
+          </div>
+        </div>
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Внешние сервисы</h4>
+          <div class="arch-component" data-desc="Telegram хранит сообщения и файлы. Ваш код видит их только через Bot API методы вроде get_file и download_file.">
+            <div class="arch-icon">✈️</div>
+            <span>Telegram Bot API</span>
+          </div>
+          <div class="arch-component" data-desc="OpenAI отвечает за chat completion и transcription. Это отдельная внешняя система с отдельными моделями и стоимостью вызовов.">
+            <div class="arch-icon">🌐</div>
+            <span>OpenAI API</span>
+          </div>
+        </div>
+        <div class="arch-zone">
+          <h4 class="arch-zone-label">Конфигурация</h4>
+          <div class="arch-component" data-desc="config.py читает env-файлы local.env и .env и валидирует обязательные токены. Секреты не зашиваются в код.">
+            <div class="arch-icon">🔑</div>
+            <span>env-файлы</span>
+          </div>
+        </div>
+        <div class="arch-description">Кликните на границу, чтобы увидеть, какая ответственность на ней лежит.</div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Какие настройки действительно двигают систему</h2>
+      <p class="animate-in">
+        Хорошая конфигурация похожа на паспортный контроль: наружу выпускаются только те данные, без которых система не может жить.
+        Все остальное либо имеет дефолт, либо игнорируется.
+      </p>
+
+      <div class="badge-list animate-in">
+        <div class="badge-item">
+          <code class="badge-code">BOT_TOKEN</code>
+          <span class="badge-desc">Позволяет приложению действовать от имени Telegram-бота</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">OPENAI_API_KEY</code>
+          <span class="badge-desc">Открывает доступ к внешнему AI-провайдеру</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">OPENAI_CHAT_MODEL</code>
+          <span class="badge-desc">Выбирает модель для ответов на текст и фото</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">OPENAI_TRANSCRIPTION_MODEL</code>
+          <span class="badge-desc">Выбирает модель для расшифровки голосовых</span>
+        </div>
+        <div class="badge-item">
+          <code class="badge-code">SYSTEM_PROMPT</code>
+          <span class="badge-desc">Формирует характер и стиль ответа ассистента</span>
+        </div>
+      </div>
+
+      <div class="callout callout-accent animate-in">
+        <div class="callout-icon">🔐</div>
+        <div class="callout-content">
+          <strong class="callout-title">Практический вывод</strong>
+          <p>Если AI-агент предлагает вписать ключ прямо в Python-файл, это уже архитектурный запах. В этом проекте секреты намеренно живут только в окружении.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, где голос выходит за пределы приложения</h2>
+      <p class="animate-in">
+        Источник: <code>bot/ai/client.py</code>, строки 173-182.
+        Здесь видна граница с внешним
+        <span class="term" data-definition="SDK это готовая библиотека от сервиса, которая помогает вашему коду общаться с внешним API без ручной сборки всех HTTP-запросов.">SDK</span>:
+        локальные байты превращаются в запрос к OpenAI, а затем обратно в обычный текст.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line">buffer = <span class="code-function">BytesIO</span>(audio_bytes)</span>
+<span class="code-line">buffer.name = filename</span>
+<span class="code-line">response = <span class="code-keyword">await</span> self._transcription_client.audio.transcriptions.create(</span>
+<span class="code-line">    <span class="code-property">model</span>=self._transcription_model,</span>
+<span class="code-line">    <span class="code-property">file</span>=buffer,</span>
+<span class="code-line">    <span class="code-property">response_format</span>=<span class="code-string">"text"</span>,</span>
+<span class="code-line">)</span>
+<span class="code-line"><span class="code-keyword">if</span> <span class="code-function">isinstance</span>(response, <span class="code-function">str</span>):</span>
+<span class="code-line">    <span class="code-keyword">return</span> response.strip()</span>
+<span class="code-line"><span class="code-keyword">return</span> <span class="code-function">getattr</span>(response, <span class="code-string">"text"</span>, <span class="code-string">""</span>).strip()</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Сырые байты голоса оборачиваются во временный файловый объект, потому что внешнее API ждет именно файл.</p>
+            <p class="tl">К объекту добавляется имя файла, чтобы сервис понимал, с чем работает.</p>
+            <p class="tl">Дальше вызывается удаленная транскрипция: модель, файл и формат ответа отправляются наружу.</p>
+            <p class="tl">Когда ответ приходит обратно, код аккуратно нормализует его в обычную строку без лишних пробелов.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Квиз про границы системы</h2>
+      <div class="quiz-container animate-in" id="quiz-module4">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Да. Это классическая внешняя граница, потому что проблема лежит между вашим процессом и удаленным сервисом."
+             data-explanation-wrong="Подумайте не о бизнес-логике, а о том, где именно приложение покидает свой внутренний мир и идет во внешний сервис.">
+          <h3 class="quiz-question">Если транскрипция перестала работать из-за нового ответа OpenAI, какая граница сломалась первой?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Внутренний routing между handlers</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Интеграция между вашим AI-клиентом и OpenAI API</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Папка <code>tests/</code> как структура файлов</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Именно. Модель и секреты относятся к окружению, поэтому их логично менять через env, не трогая код приложения."
+             data-explanation-wrong="Спросите себя, где в проекте уже предусмотрено место для секретов и параметров моделей.">
+          <h3 class="quiz-question">Вы хотите попробовать другую chat-модель без изменения Python-кода. Какой путь самый здоровый?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Поменять значение в <code>.env</code> или <code>local.env</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Захардкодить новую строку прямо в <code>bot/ai/client.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Изменить комментарий в README</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Верно. Polling означает, что приложение само регулярно спрашивает Telegram, не пришли ли новые обновления."
+             data-explanation-wrong="Подумайте, кто делает первый ход: ваш процесс или Telegram. В polling инициатором является ваш бот.">
+          <h3 class="quiz-question">Что практически означает, что бот работает в режиме <span class="term" data-definition="Polling это режим, в котором приложение само регулярно опрашивает внешний сервис на предмет новых событий. То есть бот спрашивает Telegram снова и снова: есть ли новые сообщения.">polling</span>?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Telegram запускает ваш код у себя на серверах</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Бот читает сообщения прямо из README</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Ваш процесс сам ходит в Telegram и забирает новые update</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="module" id="module-5" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">05</span>
+      <h1 class="module-title">Как проект держит надежность и где его дебажить</h1>
+      <p class="module-subtitle">
+        С инженерной точки зрения это не “просто бот”, а аккуратно ограниченная система:
+        она валидирует вход, не держит секреты в коде, пишет структурные логи и покрыта тестами.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Пять защитных приемов, которые уже есть в репозитории</h2>
+      <div class="pattern-cards stagger-children">
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-1);">
+          <div class="pattern-icon" style="background: var(--color-actor-1);">📏</div>
+          <h4 class="pattern-title">Лимиты на вложения</h4>
+          <p class="pattern-desc">Фото и голос режутся по размеру еще до дорогих вызовов наружу.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-2);">
+          <div class="pattern-icon" style="background: var(--color-actor-2);">🪪</div>
+          <h4 class="pattern-title">Проверка <span class="term" data-definition="MIME type это короткая метка формата файла. Она помогает программе понять, что перед ней: mp3, ogg, jpeg или что-то совсем другое.">MIME type</span></h4>
+          <p class="pattern-desc">Неподдерживаемый формат голоса отклоняется с понятным ответом пользователю.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-3);">
+          <div class="pattern-icon" style="background: var(--color-actor-3);">🧾</div>
+          <h4 class="pattern-title"><span class="term" data-definition="Структурные логи это логи, где важные поля вроде user_id, chat_id и message_type записываются отдельными значениями, а не прячутся в одной длинной строке. По ним проще фильтровать и искать сбои.">Структурные логи</span></h4>
+          <p class="pattern-desc">Логи знают chat_id, user_id, message_id и тип сообщения, а значит быстрее ведут к месту сбоя.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-4);">
+          <div class="pattern-icon" style="background: var(--color-actor-4);">🧹</div>
+          <h4 class="pattern-title">Корректный shutdown</h4>
+          <p class="pattern-desc">Даже если setup падает, HTTP-сессия Telegram закрывается в <code>finally</code>.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-5);">
+          <div class="pattern-icon" style="background: var(--color-actor-5);">🧪</div>
+          <h4 class="pattern-title">Тесты на маршруты</h4>
+          <p class="pattern-desc">Есть отдельные тесты на config, handlers, bootstrap, AI client и file handling.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, который не бросает ресурсы при сбое</h2>
+      <p class="animate-in">
+        Источник: <code>bot/run.py</code>, строки 47-68. Это архитектурный момент важнее, чем кажется:
+        хороший процесс думает не только о запуске, но и о том, как корректно завершиться.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line"><span class="code-keyword">try</span>:</span>
+<span class="code-line">    logger.<span class="code-function">info</span>(<span class="code-string">"Deleting webhook before polling"</span>)</span>
+<span class="code-line">    loop.<span class="code-function">run_until_complete</span>(bot.<span class="code-function">delete_webhook</span>())</span>
+<span class="code-line">    logger.<span class="code-function">info</span>(<span class="code-string">"Setting up bot and dispatcher"</span>)</span>
+<span class="code-line">    loop.<span class="code-function">run_until_complete</span>(</span>
+<span class="code-line">        <span class="code-function">setup_bot</span>(</span>
+<span class="code-line">            <span class="code-property">bot</span>=bot,</span>
+<span class="code-line">            <span class="code-property">dispatcher</span>=dp,</span>
+<span class="code-line">            <span class="code-property">chat_service</span>=chat_service,</span>
+<span class="code-line">        )</span>
+<span class="code-line">    )</span>
+<span class="code-line"><span class="code-keyword">finally</span>:</span>
+<span class="code-line">    logger.<span class="code-function">info</span>(<span class="code-string">"Closing bot session"</span>)</span>
+<span class="code-line">    loop.<span class="code-function">run_until_complete</span>(<span class="code-function">close_bot_session</span>(bot))</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Система пробует запустить polling по обычному плану: убрать webhook и подготовить бота.</p>
+            <p class="tl">Даже если на этапе setup случится авария, код не выходит молча и не забывает про сетевую сессию.</p>
+            <p class="tl">Блок <code>finally</code> срабатывает почти как обязательная уборка в конце смены: сначала закрыть соединение, потом отпускать процесс.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Если что-то ломается, где искать первым делом</h2>
+      <div class="file-tree animate-in">
+        <div class="ft-folder open">
+          <span class="ft-name">tests/</span>
+          <span class="ft-desc">Карта готовых проверок</span>
+          <div class="ft-children">
+            <div class="ft-file">
+              <span class="ft-name">test_bootstrap.py</span>
+              <span class="ft-desc">Проверяет wiring, setup и shutdown цикла</span>
+            </div>
+            <div class="ft-file">
+              <span class="ft-name">test_handlers.py</span>
+              <span class="ft-desc">Проверяет ответы на ошибки и корректную маршрутизацию сообщений</span>
+            </div>
+            <div class="ft-file">
+              <span class="ft-name">test_ai_client.py</span>
+              <span class="ft-desc">Проверяет сборку запросов к модели и транскрипции</span>
+            </div>
+            <div class="ft-file">
+              <span class="ft-name">test_settings_and_files.py</span>
+              <span class="ft-desc">Проверяет env-файлы и защиту вложений</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-cards animate-in">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Сначала определите границу сбоя</strong>
+            <p>Это проблема config, Telegram download, сервиса или OpenAI-интеграции?</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Потом найдите соответствующий тест</strong>
+            <p>В репозитории уже есть хорошие якоря, откуда начинать локализацию ошибки.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Только затем меняйте код</strong>
+            <p>Так вы чините конкретную границу, а не блуждаете по всей системе наугад.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-info animate-in">
+        <div class="callout-icon">🧭</div>
+        <div class="callout-content">
+          <strong class="callout-title">Главный debugging-вопрос</strong>
+          <p>Не “какой файл сломан?”, а “на каком шаге остановился путь сообщения?”. Такой вопрос почти всегда быстрее ведет к ответу.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Финальный квиз</h2>
+      <div class="quiz-container animate-in" id="quiz-module5">
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Верно. Это уже готовая инженерная страховка: тест на bootstrap и shutdown проверяет именно такой риск."
+             data-explanation-wrong="Подумайте, какой файл отвечает не за ответы пользователю, а за жизненный цикл процесса и закрытие ресурсов.">
+          <h3 class="quiz-question">После ошибки на старте вы подозреваете, что сессия Telegram остается открытой. Где искать подтверждение или опровержение?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>README.md</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/services/chat.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/run.py</code> и <code>tests/test_bootstrap.py</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Да. Структурные логи с chat_id, user_id и message_type дают контекст, без которого вы не поймете, какой именно маршрут сломался."
+             data-explanation-wrong="Логи полезны не просто фактом наличия, а тем, что в них уже лежит контекст входящего сообщения.">
+          <h3 class="quiz-question">Почему логирование в этом проекте полезно не только разработчику, но и AI-агенту, который чинит баг?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что логи сразу показывают контекст сообщения и шаг, на котором произошел сбой</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что без логов Python вообще не запускается</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что логи автоматически исправляют ошибки в коде</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Точно. Сначала защита на входе, потом дорогая интеграция. Это один из самых ценных архитектурных паттернов в проекте."
+             data-explanation-wrong="Подумайте о стоимости ошибки: что безопаснее проверить локально до похода во внешний сервис?">
+          <h3 class="quiz-question">Вы добавляете новый тип вложения. Какой порядок действий архитектурно здоровее всего?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сначала отправить сырой файл в OpenAI, а потом уже решать, поддерживается ли формат</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сначала валидировать размер и формат, затем передавать файл дальше по цепочке</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Добавить новый handler и больше ничего не менять</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>
+  </main>
+
+</body>
+</html>

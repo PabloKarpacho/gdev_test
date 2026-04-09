@@ -1,0 +1,213 @@
+<section class="module" id="module-5" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">05</span>
+      <h1 class="module-title">Как проект держит надежность и где его дебажить</h1>
+      <p class="module-subtitle">
+        С инженерной точки зрения это не “просто бот”, а аккуратно ограниченная система:
+        она валидирует вход, не держит секреты в коде, пишет структурные логи и покрыта тестами.
+      </p>
+    </header>
+
+    <div class="screen">
+      <h2 class="screen-heading">Пять защитных приемов, которые уже есть в репозитории</h2>
+      <div class="pattern-cards stagger-children">
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-1);">
+          <div class="pattern-icon" style="background: var(--color-actor-1);">📏</div>
+          <h4 class="pattern-title">Лимиты на вложения</h4>
+          <p class="pattern-desc">Фото и голос режутся по размеру еще до дорогих вызовов наружу.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-2);">
+          <div class="pattern-icon" style="background: var(--color-actor-2);">🪪</div>
+          <h4 class="pattern-title">Проверка <span class="term" data-definition="MIME type это короткая метка формата файла. Она помогает программе понять, что перед ней: mp3, ogg, jpeg или что-то совсем другое.">MIME type</span></h4>
+          <p class="pattern-desc">Неподдерживаемый формат голоса отклоняется с понятным ответом пользователю.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-3);">
+          <div class="pattern-icon" style="background: var(--color-actor-3);">🧾</div>
+          <h4 class="pattern-title"><span class="term" data-definition="Структурные логи это логи, где важные поля вроде user_id, chat_id и message_type записываются отдельными значениями, а не прячутся в одной длинной строке. По ним проще фильтровать и искать сбои.">Структурные логи</span></h4>
+          <p class="pattern-desc">Логи знают chat_id, user_id, message_id и тип сообщения, а значит быстрее ведут к месту сбоя.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-4);">
+          <div class="pattern-icon" style="background: var(--color-actor-4);">🧹</div>
+          <h4 class="pattern-title">Корректный shutdown</h4>
+          <p class="pattern-desc">Даже если setup падает, HTTP-сессия Telegram закрывается в <code>finally</code>.</p>
+        </div>
+        <div class="pattern-card animate-in" style="border-top: 3px solid var(--color-actor-5);">
+          <div class="pattern-icon" style="background: var(--color-actor-5);">🧪</div>
+          <h4 class="pattern-title">Тесты на маршруты</h4>
+          <p class="pattern-desc">Есть отдельные тесты на config, handlers, bootstrap, AI client и file handling.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Код, который не бросает ресурсы при сбое</h2>
+      <p class="animate-in">
+        Источник: <code>bot/run.py</code>, строки 47-68. Это архитектурный момент важнее, чем кажется:
+        хороший процесс думает не только о запуске, но и о том, как корректно завершиться.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code><span class="code-line"><span class="code-keyword">try</span>:</span>
+<span class="code-line">    logger.<span class="code-function">info</span>(<span class="code-string">"Deleting webhook before polling"</span>)</span>
+<span class="code-line">    loop.<span class="code-function">run_until_complete</span>(bot.<span class="code-function">delete_webhook</span>())</span>
+<span class="code-line">    logger.<span class="code-function">info</span>(<span class="code-string">"Setting up bot and dispatcher"</span>)</span>
+<span class="code-line">    loop.<span class="code-function">run_until_complete</span>(</span>
+<span class="code-line">        <span class="code-function">setup_bot</span>(</span>
+<span class="code-line">            <span class="code-property">bot</span>=bot,</span>
+<span class="code-line">            <span class="code-property">dispatcher</span>=dp,</span>
+<span class="code-line">            <span class="code-property">chat_service</span>=chat_service,</span>
+<span class="code-line">        )</span>
+<span class="code-line">    )</span>
+<span class="code-line"><span class="code-keyword">finally</span>:</span>
+<span class="code-line">    logger.<span class="code-function">info</span>(<span class="code-string">"Closing bot session"</span>)</span>
+<span class="code-line">    loop.<span class="code-function">run_until_complete</span>(<span class="code-function">close_bot_session</span>(bot))</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Система пробует запустить polling по обычному плану: убрать webhook и подготовить бота.</p>
+            <p class="tl">Даже если на этапе setup случится авария, код не выходит молча и не забывает про сетевую сессию.</p>
+            <p class="tl">Блок <code>finally</code> срабатывает почти как обязательная уборка в конце смены: сначала закрыть соединение, потом отпускать процесс.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Если что-то ломается, где искать первым делом</h2>
+      <div class="file-tree animate-in">
+        <div class="ft-folder open">
+          <span class="ft-name">tests/</span>
+          <span class="ft-desc">Карта готовых проверок</span>
+          <div class="ft-children">
+            <div class="ft-file">
+              <span class="ft-name">test_bootstrap.py</span>
+              <span class="ft-desc">Проверяет wiring, setup и shutdown цикла</span>
+            </div>
+            <div class="ft-file">
+              <span class="ft-name">test_handlers.py</span>
+              <span class="ft-desc">Проверяет ответы на ошибки и корректную маршрутизацию сообщений</span>
+            </div>
+            <div class="ft-file">
+              <span class="ft-name">test_ai_client.py</span>
+              <span class="ft-desc">Проверяет сборку запросов к модели и транскрипции</span>
+            </div>
+            <div class="ft-file">
+              <span class="ft-name">test_settings_and_files.py</span>
+              <span class="ft-desc">Проверяет env-файлы и защиту вложений</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-cards animate-in">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Сначала определите границу сбоя</strong>
+            <p>Это проблема config, Telegram download, сервиса или OpenAI-интеграции?</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Потом найдите соответствующий тест</strong>
+            <p>В репозитории уже есть хорошие якоря, откуда начинать локализацию ошибки.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Только затем меняйте код</strong>
+            <p>Так вы чините конкретную границу, а не блуждаете по всей системе наугад.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-info animate-in">
+        <div class="callout-icon">🧭</div>
+        <div class="callout-content">
+          <strong class="callout-title">Главный debugging-вопрос</strong>
+          <p>Не “какой файл сломан?”, а “на каком шаге остановился путь сообщения?”. Такой вопрос почти всегда быстрее ведет к ответу.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <h2 class="screen-heading">Финальный квиз</h2>
+      <div class="quiz-container animate-in" id="quiz-module5">
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Верно. Это уже готовая инженерная страховка: тест на bootstrap и shutdown проверяет именно такой риск."
+             data-explanation-wrong="Подумайте, какой файл отвечает не за ответы пользователю, а за жизненный цикл процесса и закрытие ресурсов.">
+          <h3 class="quiz-question">После ошибки на старте вы подозреваете, что сессия Telegram остается открытой. Где искать подтверждение или опровержение?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>README.md</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/services/chat.py</code></span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span><code>bot/run.py</code> и <code>tests/test_bootstrap.py</code></span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Да. Структурные логи с chat_id, user_id и message_type дают контекст, без которого вы не поймете, какой именно маршрут сломался."
+             data-explanation-wrong="Логи полезны не просто фактом наличия, а тем, что в них уже лежит контекст входящего сообщения.">
+          <h3 class="quiz-question">Почему логирование в этом проекте полезно не только разработчику, но и AI-агенту, который чинит баг?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что логи сразу показывают контекст сообщения и шаг, на котором произошел сбой</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что без логов Python вообще не запускается</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Потому что логи автоматически исправляют ошибки в коде</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Точно. Сначала защита на входе, потом дорогая интеграция. Это один из самых ценных архитектурных паттернов в проекте."
+             data-explanation-wrong="Подумайте о стоимости ошибки: что безопаснее проверить локально до похода во внешний сервис?">
+          <h3 class="quiz-question">Вы добавляете новый тип вложения. Какой порядок действий архитектурно здоровее всего?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сначала отправить сырой файл в OpenAI, а потом уже решать, поддерживается ли формат</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Сначала валидировать размер и формат, затем передавать файл дальше по цепочке</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Добавить новый handler и больше ничего не менять</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Проверить ответы</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Попробовать снова</button>
+      </div>
+    </div>
+  </div>
+</section>

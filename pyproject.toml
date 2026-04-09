@@ -1,0 +1,23 @@
+[project]
+name = "noti-bot"
+version = "0.1.0"
+description = "Telegram bot with ChatGPT integration for text, voice, and photo messages."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram==3.7.0",
+    "coverage>=7.8.0",
+    "langchain-openai>=0.3.0",
+    "loguru==0.7.3",
+    "openai>=1.68.0",
+    "pydantic-settings==2.3.1",
+]
+
+[project.scripts]
+telegram-chatgpt-bot = "bot.__main__:main"
+
+[tool.coverage.run]
+source = ["bot"]
+
+[tool.coverage.report]
+fail_under = 80
